@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2E8FA5">
+<title>Catálogo — Shopping Asia</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{ --teal:#2E8FA5; --naranja:#F58634; }
+  *{box-sizing:border-box}
+  body{font-family:'Open Sans',system-ui,sans-serif;margin:0;background:#f4f5f7;color:#1c1c28}
+  header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid #e8e8ee;
+         padding:10px 14px;display:flex;flex-direction:column;gap:8px}
+  .marca{font-weight:800;font-size:18px}.marca span{color:var(--naranja)}
+  .buscar{display:flex;gap:8px}
+  .buscar input{flex:1;padding:11px 12px;border:1px solid #ddd;border-radius:10px;font-size:16px}
+  .chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+  .chip{white-space:nowrap;background:#eef3f4;color:var(--teal);border:0;border-radius:999px;
+        padding:7px 13px;font-size:13px;font-weight:700;cursor:pointer}
+  .chip.activo{background:var(--teal);color:#fff}
+  main{padding:12px 14px 40px}
+  .cat{margin-bottom:22px}
+  .cat h2{font-size:16px;margin:0 0 10px;color:#1c1c28}
+  .cat h2 small{color:#8a8a99;font-weight:600}
+  .grilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .tarjeta{background:#fff;border:1px solid #ececf2;border-radius:12px;overflow:hidden;cursor:pointer;
+           box-shadow:0 1px 6px rgba(0,0,0,.04)}
+  .tarjeta img{width:100%;aspect-ratio:1/1;object-fit:cover;display:block;background:#f0f0f4}
+  .estado{color:#6b6b7a;font-size:14px;padding:20px 4px}
+  /* Visor (lightbox) */
+  .visor{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;z-index:20;
+         flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:14px}
+  .visor.abierto{display:flex}
+  .visor img{max-width:100%;max-height:70vh;border-radius:10px;background:#fff}
+  .visor .acciones{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .visor button{border:0;border-radius:12px;padding:12px 18px;font-size:15px;font-weight:800;cursor:pointer;color:#fff}
+  .b-compartir{background:#25D366}.b-descargar{background:var(--teal)}.b-cerrar{background:#444}
+  .pie{color:#9a9aa8;font-size:12px;text-align:center;padding:16px}
+</style>
+</head>
+<body>
+<header>
+  <div class="marca">SHOPPING <span>ASIA</span> — Catálogo</div>
+  <div class="buscar"><input id="q" type="search" placeholder="Buscar por categoría o nombre…"></div>
+  <div class="chips" id="chips"></div>
+</header>
+<main>
+  <div id="contenido"></div>
+  <div class="estado" id="estado">Cargando catálogo…</div>
+</main>
+<div class="pie" id="pie"></div>
+
+<div class="visor" id="visor">
+  <img id="visor-img" alt="">
+  <div class="acciones">
+    <button class="b-compartir" id="v-compartir">Compartir</button>
+    <button class="b-descargar" id="v-descargar">Descargar</button>
+    <button class="b-cerrar" id="v-cerrar">Cerrar</button>
+  </div>
+</div>
+
+<script>
+const $ = (s)=>document.querySelector(s);
+let CAT = [];            // categorías del catálogo
+let filtro = "";         // texto de búsqueda
+let categoriaSel = "";   // chip seleccionado
+
+const enc = (p)=>p.split("/").map(encodeURIComponent).join("/");
+
+async function cargar(){
+  try{
+    const r = await fetch("datos/catalogo.json", {cache:"no-store"});
+    if(!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    CAT = j.categorias || [];
+    $("#pie").textContent = `Actualizado: ${j.actualizado||"—"} · ${j.total||0} flyers`;
+    render();
+  }catch(e){
+    $("#estado").textContent = "No pude cargar el catálogo. Probá recargar.";
+  }
+}
+
+function render(){
+  // chips de categorías
+  const chips = $("#chips");
+  chips.innerHTML = "";
+  const todos = document.createElement("button");
+  todos.className = "chip"+(categoriaSel===""?" activo":"");
+  todos.textContent = "Todas";
+  todos.onclick = ()=>{ categoriaSel=""; render(); };
+  chips.appendChild(todos);
+  CAT.forEach(c=>{
+    const b = document.createElement("button");
+    b.className = "chip"+(categoriaSel===c.nombre?" activo":"");
+    b.textContent = c.nombre;
+    b.onclick = ()=>{ categoriaSel = (categoriaSel===c.nombre?"":c.nombre); render(); };
+    chips.appendChild(b);
+  });
+
+  const cont = $("#contenido");
+  cont.innerHTML = "";
+  const f = filtro.trim().toLowerCase();
+  let mostrados = 0;
+
+  CAT.forEach(c=>{
+    if(categoriaSel && c.nombre!==categoriaSel) return;
+    let items = c.items;
+    if(f){
+      const catMatch = c.nombre.toLowerCase().includes(f);
+      items = catMatch ? items : items.filter(it=>it.archivo.toLowerCase().includes(f));
+    }
+    if(!items.length) return;
+    mostrados += items.length;
+
+    const sec = document.createElement("section");
+    sec.className = "cat";
+    const h = document.createElement("h2");
+    h.innerHTML = `${c.nombre} <small>(${items.length})</small>`;
+    sec.appendChild(h);
+    const g = document.createElement("div");
+    g.className = "grilla";
+    items.forEach(it=>{
+      const card = document.createElement("div");
+      card.className = "tarjeta";
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.src = enc(it.thumb);
+      img.alt = c.nombre;
+      card.onclick = ()=>abrirVisor(it, c.nombre);
+      card.appendChild(img);
+      g.appendChild(card);
+    });
+    sec.appendChild(g);
+    cont.appendChild(sec);
+  });
+
+  $("#estado").textContent = mostrados ? "" :
+     (CAT.length ? "Sin resultados para la búsqueda." :
+      "El catálogo está vacío por ahora. Guardá flyers desde la app y volvé a sincronizar.");
+}
+
+// ------- visor / compartir -------
+let actual = null;
+function abrirVisor(it, categoria){
+  actual = {full:it.full, archivo:it.archivo, categoria};
+  $("#visor-img").src = enc(it.full);
+  $("#visor").classList.add("abierto");
+}
+function cerrarVisor(){ $("#visor").classList.remove("abierto"); $("#visor-img").src=""; }
+
+async function blobActual(){
+  const r = await fetch(enc(actual.full));
+  return await r.blob();
+}
+async function compartir(){
+  if(!actual) return;
+  try{
+    const blob = await blobActual();
+    const file = new File([blob], actual.archivo, {type:blob.type||"image/jpeg"});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file], title:actual.categoria});
+      return;
+    }
+  }catch(e){ if(e && e.name==="AbortError") return; }
+  descargar();
+}
+async function descargar(){
+  if(!actual) return;
+  const a = document.createElement("a");
+  a.href = enc(actual.full); a.download = actual.archivo;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+$("#q").addEventListener("input", e=>{ filtro = e.target.value; render(); });
+$("#v-cerrar").addEventListener("click", cerrarVisor);
+$("#visor").addEventListener("click", e=>{ if(e.target.id==="visor") cerrarVisor(); });
+$("#v-compartir").addEventListener("click", compartir);
+$("#v-descargar").addEventListener("click", descargar);
+
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+cargar();
+</script>
+</body>
+</html>

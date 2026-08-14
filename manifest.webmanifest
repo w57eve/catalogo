@@ -1,0 +1,9 @@
+{
+  "name": "Catálogo Shopping Asia",
+  "short_name": "Catálogo",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f5f7",
+  "theme_color": "#2E8FA5",
+  "icons": []
+}
