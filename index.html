@@ -35,10 +35,19 @@
   .visor{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;z-index:20;
          flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:14px}
   .visor.abierto{display:flex}
-  .visor img{max-width:100%;max-height:70vh;border-radius:10px;background:#fff}
+  .visor img{max-width:100%;max-height:70vh;border-radius:10px;background:#fff;
+             touch-action:none;user-select:none;-webkit-user-drag:none}
   .visor .acciones{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
   .visor button{border:0;border-radius:12px;padding:12px 18px;font-size:15px;font-weight:800;cursor:pointer;color:#fff}
   .b-compartir{background:#25D366}.b-descargar{background:var(--teal)}.b-cerrar{background:#444}
+  /* galería deslizable */
+  .visor .nav-flecha{position:fixed;top:50%;transform:translateY(-50%);z-index:21;padding:0;
+    background:rgba(255,255,255,.16);color:#fff;border-radius:50%;width:48px;height:48px;
+    font-size:26px;line-height:1;display:flex;align-items:center;justify-content:center}
+  .visor .nav-prev{left:10px}.visor .nav-next{right:10px}
+  .visor .nav-flecha:disabled{opacity:.22}
+  .visor .contador{position:fixed;top:14px;left:0;right:0;text-align:center;color:#fff;
+    font-size:14px;font-weight:700;opacity:.9;pointer-events:none}
   .pie{color:#9a9aa8;font-size:12px;text-align:center;padding:16px}
 </style>
 </head>
@@ -55,7 +64,10 @@
 <div class="pie" id="pie"></div>
 
 <div class="visor" id="visor">
+  <div class="contador" id="v-contador"></div>
+  <button class="nav-flecha nav-prev" id="v-prev" aria-label="Anterior">‹</button>
   <img id="visor-img" alt="">
+  <button class="nav-flecha nav-next" id="v-next" aria-label="Siguiente">›</button>
   <div class="acciones">
     <button class="b-compartir" id="v-compartir">Compartir</button>
     <button class="b-descargar" id="v-descargar">Descargar</button>
@@ -123,14 +135,14 @@ function render(){
     sec.appendChild(h);
     const g = document.createElement("div");
     g.className = "grilla";
-    items.forEach(it=>{
+    items.forEach((it, idx)=>{
       const card = document.createElement("div");
       card.className = "tarjeta";
       const img = document.createElement("img");
       img.loading = "lazy";
       img.src = enc(it.thumb);
       img.alt = c.nombre;
-      card.onclick = ()=>abrirVisor(it, c.nombre);
+      card.onclick = ()=>abrirVisor(items, idx, c.nombre);
       card.appendChild(img);
       g.appendChild(card);
     });
@@ -143,12 +155,29 @@ function render(){
       "El catálogo está vacío por ahora. Guardá flyers desde la app y volvé a sincronizar.");
 }
 
-// ------- visor / compartir -------
-let actual = null;
-function abrirVisor(it, categoria){
-  actual = {full:it.full, archivo:it.archivo, categoria};
-  $("#visor-img").src = enc(it.full);
+// ------- visor / galería deslizable / compartir -------
+let actual = null, LISTA = [], POS = 0, VIS_CAT = "";
+function abrirVisor(lista, pos, categoria){
+  LISTA = lista; POS = pos; VIS_CAT = categoria;
   $("#visor").classList.add("abierto");
+  mostrar();
+}
+function mostrar(){
+  const it = LISTA[POS];
+  actual = {full:it.full, archivo:it.archivo, categoria:VIS_CAT};
+  const img = $("#visor-img");
+  img.style.transition = "none"; img.style.transform = "translateX(0)";
+  img.src = enc(it.full);
+  $("#v-contador").textContent = (POS+1) + " / " + LISTA.length;
+  $("#v-prev").disabled = POS <= 0;
+  $("#v-next").disabled = POS >= LISTA.length - 1;
+  // precargar vecinas para que el deslizado sea instantáneo
+  [POS-1, POS+1].forEach(p=>{ if(LISTA[p]){ const im = new Image(); im.src = enc(LISTA[p].full); } });
+}
+function nav(d){
+  const n = POS + d;
+  if(n < 0 || n >= LISTA.length) return;
+  POS = n; mostrar();
 }
 function cerrarVisor(){ $("#visor").classList.remove("abierto"); $("#visor-img").src=""; }
 
@@ -180,6 +209,31 @@ $("#v-cerrar").addEventListener("click", cerrarVisor);
 $("#visor").addEventListener("click", e=>{ if(e.target.id==="visor") cerrarVisor(); });
 $("#v-compartir").addEventListener("click", compartir);
 $("#v-descargar").addEventListener("click", descargar);
+
+// navegación de la galería: flechas, teclado y deslizar con el dedo
+$("#v-prev").addEventListener("click", ()=>nav(-1));
+$("#v-next").addEventListener("click", ()=>nav(1));
+document.addEventListener("keydown", e=>{
+  if(!$("#visor").classList.contains("abierto")) return;
+  if(e.key==="ArrowLeft") nav(-1);
+  else if(e.key==="ArrowRight") nav(1);
+  else if(e.key==="Escape") cerrarVisor();
+});
+(function(){
+  const img = $("#visor-img"); let x0=0, dx=0, dragging=false;
+  img.addEventListener("pointerdown", e=>{ x0=e.clientX; dx=0; dragging=true;
+    img.style.transition="none"; try{ img.setPointerCapture(e.pointerId); }catch(_){} });
+  img.addEventListener("pointermove", e=>{ if(!dragging) return;
+    dx=e.clientX-x0; img.style.transform="translateX("+dx+"px)"; });
+  function fin(){ if(!dragging) return; dragging=false;
+    const umbral=45;
+    if(dx<=-umbral && POS<LISTA.length-1) nav(1);
+    else if(dx>=umbral && POS>0) nav(-1);
+    else { img.style.transition="transform .18s"; img.style.transform="translateX(0)"; }
+  }
+  img.addEventListener("pointerup", fin);
+  img.addEventListener("pointercancel", fin);
+})();
 
 if("serviceWorker" in navigator){
   navigator.serviceWorker.register("sw.js").catch(()=>{});
