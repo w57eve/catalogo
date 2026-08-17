@@ -42,12 +42,14 @@
   .b-compartir{background:#25D366}.b-descargar{background:var(--teal)}.b-cerrar{background:#444}
   /* galería deslizable */
   .visor .nav-flecha{position:fixed;top:50%;transform:translateY(-50%);z-index:21;padding:0;
-    background:rgba(255,255,255,.16);color:#fff;border-radius:50%;width:48px;height:48px;
-    font-size:26px;line-height:1;display:flex;align-items:center;justify-content:center}
-  .visor .nav-prev{left:10px}.visor .nav-next{right:10px}
-  .visor .nav-flecha:disabled{opacity:.22}
+    background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.35);
+    box-shadow:0 2px 8px rgba(0,0,0,.5);border-radius:50%;width:50px;height:50px;
+    font-size:28px;line-height:1;display:flex;align-items:center;justify-content:center}
+  .visor .nav-flecha:active{background:rgba(0,0,0,.75)}
+  .visor .nav-prev{left:12px}.visor .nav-next{right:12px}
+  .visor .nav-flecha:disabled{opacity:.28}
   .visor .contador{position:fixed;top:14px;left:0;right:0;text-align:center;color:#fff;
-    font-size:14px;font-weight:700;opacity:.9;pointer-events:none}
+    font-size:14px;font-weight:800;pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,.9)}
   .pie{color:#9a9aa8;font-size:12px;text-align:center;padding:16px}
 </style>
 </head>
@@ -166,12 +168,16 @@ function mostrar(){
   const it = LISTA[POS];
   actual = {full:it.full, archivo:it.archivo, categoria:VIS_CAT};
   const img = $("#visor-img");
-  img.style.transition = "none"; img.style.transform = "translateX(0)";
+  // Cambio con un fundido suave (nada de "saltos" raros): la nueva foto entra
+  // apareciendo. La posición vuelve al centro sin animación de arrastre.
+  img.style.transition = "none"; img.style.transform = "translateX(0)"; img.style.opacity = "0";
+  img.onload = () => { img.style.transition = "opacity .16s ease"; img.style.opacity = "1"; };
+  img.onerror = () => { img.style.opacity = "1"; };
   img.src = enc(it.full);
   $("#v-contador").textContent = (POS+1) + " / " + LISTA.length;
   $("#v-prev").disabled = POS <= 0;
   $("#v-next").disabled = POS >= LISTA.length - 1;
-  // precargar vecinas para que el deslizado sea instantáneo
+  // precargar vecinas para que el cambio sea instantáneo
   [POS-1, POS+1].forEach(p=>{ if(LISTA[p]){ const im = new Image(); im.src = enc(LISTA[p].full); } });
 }
 function nav(d){
@@ -224,7 +230,11 @@ document.addEventListener("keydown", e=>{
   img.addEventListener("pointerdown", e=>{ x0=e.clientX; dx=0; dragging=true;
     img.style.transition="none"; try{ img.setPointerCapture(e.pointerId); }catch(_){} });
   img.addEventListener("pointermove", e=>{ if(!dragging) return;
-    dx=e.clientX-x0; img.style.transform="translateX("+dx+"px)"; });
+    dx=e.clientX-x0;
+    // La foto solo "asoma" un poco (máx 55px) para dar feedback, sin volar ni
+    // dejar ver el fondo — el cambio real es con fundido al soltar.
+    const peek = Math.max(-55, Math.min(55, dx * 0.35));
+    img.style.transform = "translateX(" + peek + "px)"; });
   function fin(){ if(!dragging) return; dragging=false;
     const umbral=45;
     if(dx<=-umbral && POS<LISTA.length-1) nav(1);
