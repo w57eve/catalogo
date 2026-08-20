@@ -39,6 +39,7 @@
              touch-action:none;user-select:none;-webkit-user-drag:none}
   .visor .acciones{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
   .visor button{border:0;border-radius:12px;padding:12px 18px;font-size:15px;font-weight:800;cursor:pointer;color:#fff}
+  .b-pedir{background:var(--naranja)}.b-pedir:active{background:#d9701c}
   .b-compartir{background:#25D366}.b-descargar{background:var(--teal)}.b-cerrar{background:#444}
   /* galería deslizable */
   .visor .nav-flecha{position:fixed;top:50%;transform:translateY(-50%);z-index:21;padding:0;
@@ -71,6 +72,7 @@
   <img id="visor-img" alt="">
   <button class="nav-flecha nav-next" id="v-next" aria-label="Siguiente">›</button>
   <div class="acciones">
+    <button class="b-pedir" id="v-pedir">🛒 Hacer pedido</button>
     <button class="b-compartir" id="v-compartir">Compartir</button>
     <button class="b-descargar" id="v-descargar">Descargar</button>
     <button class="b-cerrar" id="v-cerrar">Cerrar</button>
@@ -164,9 +166,16 @@ function abrirVisor(lista, pos, categoria){
   $("#visor").classList.add("abierto");
   mostrar();
 }
+// SKU del ítem: viene en catalogo.json (campo sku) o se saca del nombre del
+// archivo, que para los flyers nuevos empieza con el SKU ({SKU}_cuadrado.jpg).
+function skuDe(it){
+  if(it && it.sku) return String(it.sku);
+  const m = String((it&&it.archivo)||"").match(/^(\d{6,})/);
+  return m ? m[1] : "";
+}
 function mostrar(){
   const it = LISTA[POS];
-  actual = {full:it.full, archivo:it.archivo, categoria:VIS_CAT};
+  actual = {full:it.full, archivo:it.archivo, categoria:VIS_CAT, sku:skuDe(it)};
   const img = $("#visor-img");
   // Cambio con un fundido suave (nada de "saltos" raros): la nueva foto entra
   // apareciendo. La posición vuelve al centro sin animación de arrastre.
@@ -215,6 +224,19 @@ $("#v-cerrar").addEventListener("click", cerrarVisor);
 $("#visor").addEventListener("click", e=>{ if(e.target.id==="visor") cerrarVisor(); });
 $("#v-compartir").addEventListener("click", compartir);
 $("#v-descargar").addEventListener("click", descargar);
+
+// "Hacer pedido": abre WhatsApp del negocio con el SKU ya escrito → el pedido
+// entra a Kommo identificado por SKU (vinculante), listo para el agente.
+const WA_PEDIDOS = "595976915333";   // WhatsApp del negocio (línea de Kommo)
+function pedir(){
+  if(!actual) return;
+  const sku = actual.sku, cat = actual.categoria || "";
+  const txt = sku
+    ? ("¡Hola! Quiero hacer un pedido 🛒\nProducto (SKU): " + sku + (cat ? ("\nCategoría: " + cat) : ""))
+    : ("¡Hola! Quiero hacer un pedido 🛒" + (cat ? ("\nCategoría: " + cat) : "") + (actual.archivo ? ("\nFlyer: " + actual.archivo) : ""));
+  window.open("https://wa.me/" + WA_PEDIDOS + "?text=" + encodeURIComponent(txt), "_blank");
+}
+$("#v-pedir").addEventListener("click", pedir);
 
 // navegación de la galería: flechas, teclado y deslizar con el dedo
 $("#v-prev").addEventListener("click", ()=>nav(-1));

@@ -1,7 +1,7 @@
 // Service worker del catálogo — apertura instantánea en repetidas visitas.
 // Shell cache-first; catalogo.json network-first (para ver novedades);
 // imágenes (thumbs/full) cache-first.
-const CACHE = "catalogo-v3";
+const CACHE = "catalogo-v4";
 const SHELL = ["./", "index.html", "manifest.webmanifest"];
 
 self.addEventListener("install", e=>{
